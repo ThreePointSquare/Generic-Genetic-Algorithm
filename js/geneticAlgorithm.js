@@ -258,13 +258,31 @@ function Functions() {
     }
 
     /**
+     * @function Functions#isValidRoute
+     * @description It scans a route chromosome and decides whether it is valid or not. It's a a solution for a particular TSP.
+     *
+     * @param {string[]} chromosome - An array in which each element is a string that represents a gene.
+     * @return {boolean} - Returns true if there is not repeated genes. Using this function invalid elements do not exist.
+     */
+
+    this.isValidRoute = function (chromosome) {
+        var sortedChromosome = chromosome["chromosome"].slice().sort();
+        for(var i=0;i<sortedChromosome.length-1;i++){
+            if (sortedChromosome[i].localeCompare(sortedChromosome[i+1]) == 0){
+                return false;
+            }
+        }
+        return true;
+    }
+
+    /**
      * @function Functions#fitnessFunction
      * @description Calculates and returns a given element’s fitness value. The fitness value is equal to the number of 1s in the chromosome.
      *
      * @param {Element} element - The element to calculate the fitness value.
      * @return {number} - Returns fitness value
      */
-    this.fitnessFunction = function (element) {
+    this.fitnessFunction = function (element,tabla) {
         var fitness = 0;
         for (var i = 0; i < element.getChromosome().length; i++) {
             if (element.getChromosome()[i].localeCompare("1") == 0) {
@@ -275,17 +293,37 @@ function Functions() {
     }
 
     /**
+     * @function Functions#fitnessRouteFunction
+     * @description Calculates and returns a given element’s fitness value for a particular TSP. The fitness value is equal to subtraction of the distance between the genes in km. The less the distance, the greater the fitness.
+     *
+     * @param {Element} element - The element to calculate the fitness value.
+     * @param {Object} table - Table with data for the TSP.
+     * @return {number} - Returns fitness value
+     */
+
+    this.fitnessRouteFunction = function (element,table) {
+        var fitness = 0;
+        for (var i = 0; i < element.getChromosome().length-1; i++) {
+            var elemento1 = element.getChromosome()[i];
+            var elemento2 = element.getChromosome()[i+1];      
+            fitness += table[elemento1].distances[elemento2].distance;
+        }
+        fitness = -2*fitness;
+        return fitness;
+    }
+
+    /**
      * @function Functions#evaluate
      * @description Assign its fitness value to each element of the population using the fitness function.
      *
      * @param {Element[]} population - A set of elements to calculate its fitness value.
      * @return {Element[]} - Returns a copy of @population after calculating the fitness value of each element.
      */
-    this.evaluate = function (population) {
+    this.evaluate = function (population,tabla) {
         var populationFitness = [];
         populationFitness = clonePopulation(population);
         for (var i = 0; i < populationFitness.length; i++) {
-            populationFitness[i].setFitness(this.fitnessFunction(populationFitness[i]));
+            populationFitness[i].setFitness(this.fitnessFunction(populationFitness[i],tabla));
         }
         return populationFitness;
     }
@@ -341,9 +379,10 @@ function Functions() {
      * @param {Element[]} parents - Elements chosen to reproduce after a selection function.
      * @param {Element[]} population - A set of Element type elements that are now the population.
      * @param {number} percent - Percentage of children who will be the calculated  as a result of crosses.
+     * @param {string[]} genes -An array of strings that represents all possible genes that may be part of a chromosome.
      * @return {Element[]} - It must return the children that are result from a crossing a population process.
      */
-    this.crossover = function (parents, population, percent) { 
+    this.crossover = function (parents, population, percent, genes) { 
         var children = [];
         var auxPopulation = clonePopulation(population);
         var firstElement = Math.floor(parents.length * (100 - percent) / 100);
@@ -379,6 +418,62 @@ function Functions() {
 
         // The last child is the son of the last and the first element of @parents
         children[i] = new Element(i, mating(parents[parents.length - 1], parents[0]), 0);
+
+        return children;
+    }
+
+    /**
+     * @function Functions#randomOverNoValidCrossover
+     * @description Given a population it generates a set of children formed after mating of his parents. Mating is to take the first half of the first parent chromosome and the second half of the second father, to concatenate and form the child element. A percentage of children who will be the result of crosses is set, the rest will be the best elements of the population. If a child is no valid, it is replaced by a random @element.
+     *
+     * @param {Element[]} parents - Elements chosen to reproduce after a selection function.
+     * @param {Element[]} population - A set of Element type elements that are now the population.
+     * @param {number} percent - Percentage of children who will be the calculated  as a result of crosses.
+     * @param {string[]} genes -An array of strings that represents all possible genes that may be part of a chromosome.
+     * @return {Element[]} - It must return the children that are result from a crossing a population process.
+     */
+    this.randomOverNoValidCrossover = function (parents, population, percent, genes) { 
+        var children = [];
+        var auxPopulation = clonePopulation(population);
+        var firstElement = Math.floor(parents.length * (100 - percent) / 100);
+
+        function mating(element1, element2) {
+            var childChromosome = [];
+            var i = 0;
+            // Half element1’s elements are inserted.
+            while (i < element1.getChromosome().length / 2) {
+                childChromosome[i] = element1.getChromosome()[i];
+                i++;
+            }
+            // Half element2’s elements are inserted.
+            while (i < element2.getChromosome().length) {
+                childChromosome[i] = element2.getChromosome()[i];
+                i++;
+            }
+            return childChromosome;
+        }
+
+        // Sort array
+        auxPopulation.sort(function (a, b) {
+            return b.getFitness() - a.getFitness();
+        });
+
+        for (var i = 0; i < firstElement; i++) {
+            children[i] = cloneElement(auxPopulation[i]);
+        }
+
+        for (var i = firstElement; i < parents.length - 1; i++) {
+            children[i] = new Element(i, mating(parents[i], parents[i + 1]), 0);
+        }
+
+        // The last child is the son of the last and the first element of @parents
+        children[i] = new Element(i, mating(parents[parents.length - 1], parents[0]), 0);
+
+        for (var i = 0; i<children.length; i++){
+            if(!this.isValid(children[i])){
+                children[i] = randomChild(children[i].getChromosome().length,genes);
+            }
+        }
 
         return children;
     }
@@ -422,7 +517,53 @@ function Functions() {
         return nextPopulation;
     }
 
+     /**
+     * @function Functions#allValidsEvolution
+     * @description Replace back the current population by each @mutatedChildren elements. If a element is not valid, the sorted parent in its position takes the place.
+     *
+     * @param {Element[]} mutatedChildren - A set of elements having undergone the processes of genetic algorithm.
+     * @return {Element[]} - Returns the population for the next generation with no invalid elements.
+     */
+    this.allValidsEvolution = function(mutatedChildren) {
+        var nextPopulation = [];
+        sortedParents = clonePopulation(this.getParents());
+        sortedParents.sort(function (a, b) {
+            return a.getFitness() - b.getFitness();
+        });
+        nextPopulation = clonePopulation(sortedParents);
+
+        for (var i = 0, j=0; i < mutatedChildren.length; i++) {
+            if(this.isValid(mutatedChildren[i])){
+                nextPopulation[j] = cloneElement(mutatedChildren[i]);
+                j++;
+            }
+        }
+        return nextPopulation;
+    }
+
     /** Utils **/
+
+     /**
+     * @function Functions#randomChild
+     * @description It returns a Element with a random chromosome.
+     *
+     * @param {Element} chromosomeSize - The size of the desire Element.
+     * @param {string[]} genes - The list of possible genes to be used by the algorithm.
+     * @return {Element} - A @element with a random
+     */
+    function randomChild(chromosomeSize,genes){
+        var auxChromosome = [];
+        var chromosomeSize = genes.length;
+        var auxGenes = genes.slice();
+        for (var j = 0; j < chromosomeSize; j++) {
+            var rand = Math.floor(Math.random() * auxGenes.length);
+            // Each element of the chromosome is a randomly chosen gene of genes list
+            auxChromosome[j] = auxGenes[rand];
+            // The element already introduced in the list of candidate genes is removed
+            auxGenes.splice(rand, 1);
+        }
+        return new Element(1, auxChromosome.slice(), 0);
+    }
 
     /**
      * @function Functions#cloneElement
@@ -464,7 +605,7 @@ function Functions() {
         for (var i = 0; i < population.length; i++) {
             result += population[i].write() + "\n";
         }
-        console.log(result);
+        return result
     }
 
 }
@@ -496,6 +637,16 @@ function GeneticAlgorithm(configuration) {
     /****************************** Attributes ********************************/
 
     that = this;
+
+    /**
+     * Optional data information about the elements
+     *
+     * @private
+     * @name GeneticAlgorithm#tabla
+     * @type Object
+     */
+   
+    this.tabla = configuration.tabla;
 
     /**
      * Current generation's elements
@@ -632,13 +783,13 @@ function GeneticAlgorithm(configuration) {
         if (that.getPopulation().length == 0) {
             console.log("There aren’t elements in the population, it must be initialized first");
         } else {
-            that.setPopulation(that.evaluate(that.getPopulation())); // Uts elements are evaluated
+            that.setPopulation(that.evaluate(that.getPopulation(),that.tabla)); // Uts elements are evaluated
             that.setParents(that.selection(that.getPopulation())); // The selection function is used to choose which elements will reproduce
-            that.setChildren(that.crossover(that.getParents(), that.getPopulation(), configuration.percentCrossOver)); // Children are created as a result of crossing.
+            that.setChildren(that.crossover(that.getParents(), that.getPopulation(), configuration.percentCrossOver,configuration.genes)); // Children are created as a result of crossing.
             that.setPopulation(that.getChildren()); // The children makes now the new population.
             that.setPopulation(that.mutation(that.getPopulation(), configuration.percentMutation, configuration.genes)); // It takes places mutation.
             that.setPopulation(that.evolution(that.getPopulation())); // The elements of population change with those obtained during the algorithm
-            that.setPopulation(that.evaluate(that.getPopulation())); // The new elements are evaluated
+            that.setPopulation(that.evaluate(that.getPopulation(),that.tabla)); // The new elements are evaluated
             that.setGeneration(that.getGeneration() + 1); // Increase the number of generation
             that.setBest((that.bestElement(that.getPopulation()))); // the best element of the generation is established
         }
@@ -733,14 +884,14 @@ function GeneticAlgorithm(configuration) {
                     first = that.cloneElement(population[i]);
                     break;
                 }
-                if (!oneValid) {
-                    console.log("There is no valid element in this generation");
-                }
+            }
+            if (!oneValid) {
+               console.log("There is no valid element in this generation");
             }
             return first;
         }
         auxPopulation = this.clonePopulation(populationWithFitness);
-        auxPopulation = this.evaluate(auxPopulation);
+        auxPopulation = this.evaluate(auxPopulation,that.tabla);
         // When you start looking, the best element is the first element found valid
         best = this.cloneElement(firstValid(auxPopulation));
         // The population is covered, looking for the best element
@@ -861,7 +1012,7 @@ function GeneticAlgorithm(configuration) {
 
     /**
      * @function GeneticAlgorithm#setParents
-     * @description It makes a copy of the population introduced as a parameter and sets it as current children.
+     * @description It makes a copy of the population introduced as a parameter and sets it as current parents.
      *
      * @param {Element[]} parents - A population of elements
      */
